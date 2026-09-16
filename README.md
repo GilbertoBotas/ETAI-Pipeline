@@ -1,3 +1,6 @@
+# Estudante 
+Gilberto Antero Botas Júnior - 20260523
+
 # Baseline Predictive Pipeline -- ETAI
 
 This is the **starting point** for your semester project: a small but *complete* predictive pipeline -- every piece a real project needs (entry point, config, data loading, preprocessing, model, evaluation), just kept as simple as possible for now.
@@ -111,3 +114,6 @@ You're free to improve on this structure or restructure it entirely -- what matt
 ## Dataset
 
 See `data/README.md`.
+
+# Result Progress
+After running the code for the first time, the logistic regression model tree is a better model for this dataset, because although the train accuracy (67,9%) is lower than the decision tree model (82,9%) and the test accuracy is bigger, the gap between the train and test accuracies is smaller.
