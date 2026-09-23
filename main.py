@@ -9,12 +9,14 @@ This orchestrates the full (deliberately simple) pipeline:
     -> evaluate (train & test) -> save results
 """
 import yaml
+from sklearn.pipeline import Pipeline
 
 from src.data import load_data
-from src.preprocessing import preprocess
+from src.preprocessing import clean_dataset, split_features_target, build_preprocessor, split_train_test
 from src.model import build_model
 from src.evaluate import evaluate, fairness_report
 from src.results import save_run
+
 
 
 def load_config(path: str = "config.yaml") -> dict:
@@ -25,18 +27,26 @@ def load_config(path: str = "config.yaml") -> dict:
 def main():
     config = load_config()
 
-    df = load_data(config["data"]["path"])
+    df_raw = load_data(config["data"]["path"])
+    df_clean = clean_dataset(df_raw, config["diagnostics"])
 
-    X_train, X_test, y_train, y_test, extras_test = preprocess(
-        df,
-        target=config["data"]["target"],
-        sensitive_attr=config["data"]["sensitive_attr"],
-        drop_columns=config["data"]["drop_columns"],
+    mnar_sources = config["preprocessing"].get("mnar_indicator_sources", [])
+    X, y, extras = split_features_target(df_clean, config["data"], mnar_sources)
+
+    # leak-safe split: everything above this line is target/split-independent and may
+    # see the whole dataset; everything below (imputation, encoding, scaling) is fit
+    # only on the training fold, inside the Pipeline below
+    X_train, X_test, y_train, y_test, extras_train, extras_test = split_train_test(
+        X, y, extras,
         test_size=config["split"]["test_size"],
         random_state=config["split"]["random_state"],
     )
 
-    model = build_model(config["model"])
+    preprocessor = build_preprocessor(config["preprocessing"])
+    model = Pipeline([
+        ("prep", preprocessor),
+        ("model", build_model(config["model"])),
+    ])
     model.fit(X_train, y_train)
 
     # predict on both splits -- train accuracy vs. test accuracy is how we'll spot overfitting, not just how "good" the model looks

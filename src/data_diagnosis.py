@@ -69,11 +69,3 @@ def find_duplicates(df: pd.DataFrame, id_column: str = None) -> dict:
     if id_column and id_column in df.columns:
         result["repeated_ids"] = int(df[id_column].duplicated().sum())
     return result
-
-def verdict_from_max_v(max_v: float) -> str:
-    if max_v >= 0.2:
-        return "MAR / MNAR (possible pattern)"
-    elif max_v >= 0.1:
-        return "borderline -- worth a closer look"
-    else:
-        return "MCAR (scattered, no pattern found)"
