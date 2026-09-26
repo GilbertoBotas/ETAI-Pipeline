@@ -115,5 +115,8 @@ You're free to improve on this structure or restructure it entirely -- what matt
 
 See `data/README.md`.
 
-# Result Progress
-After running the code for the first time, the logistic regression model tree is a better model for this dataset, because although the train accuracy (67,9%) is lower than the decision tree model (82,9%), the test accuracy is bigger and the gap between the train and test accuracies is smaller, becoming less prone to overfitting.
+# Week 2 - Result Progress
+After running the code for the first time, the logistic regression model is a better model for this dataset, because although the train accuracy (67,9%) is lower than the decision tree model (82,9%), the test accuracy is bigger and the gap between the train and test accuracies is smaller, becoming less prone to overfitting.
+
+# Week 3 - Data Cleaning Results
+After running the code with data cleaning implemented in the pipeline, the logistic regression model gap between the train accuracy and test accuracy increases from +0.001 to +0.019 (train accuracy of .679 to .676 and test from .678 to .657), and for the decision tree, the gap went from +0.197 to +0.181 (train accuracy of 0.829 to 0.792 and test from 0.632 to 0.611). Overall the logistic regression model is still between because the test accuracy is higher and the gap is smaller than the decision tree model, making it's generalization factor still better.
