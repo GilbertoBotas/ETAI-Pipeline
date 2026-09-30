@@ -65,7 +65,7 @@ preprocessing:
     categorical_strategy: "most_frequent"   # applies to sex, age_cat, c_charge_degree
 
 model:
-  type: "decision_tree"   # or " logistic_regression"
+  type: "decision_tree"   # or "dummy, decision_tree, logistic_regression, random_forest"
   params: {}
   #   max_iter: 1000
 

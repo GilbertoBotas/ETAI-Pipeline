@@ -10,7 +10,6 @@ This orchestrates the full (deliberately simple) pipeline:
 """
 import yaml
 from sklearn.pipeline import Pipeline
-
 from src.data import load_data
 from src.preprocessing import clean_dataset, split_features_target, build_preprocessor, split_train_test
 from src.model import build_model
