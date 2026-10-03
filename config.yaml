@@ -56,7 +56,7 @@ diagnostics:
 # don't hand-pick a different pair here without re-running the grid.
 preprocessing:
   encoder: "target"      # winner of the 4x4 empirical grid (onehot/ordinal/count/target x none/standard/minmax/robust),
-  scaler: "standard"     # scored on accuracy across 15 repeated splits -- see 02_preprocessing.ipynb's grid + paired check
+  scaler: "robust"     # scored on accuracy across 15 repeated splits -- see 02_preprocessing.ipynb's grid + paired check
   numeric_features: ["age", "juv_fel_count", "juv_misd_count", "juv_other_count", "priors_count"]
   categorical_features: ["sex", "age_cat", "c_charge_degree"]
   mnar_indicator_sources: ["priors_count", "c_charge_degree"]

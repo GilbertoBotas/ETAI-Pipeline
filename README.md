@@ -120,3 +120,6 @@ After running the code for the first time, the logistic regression model is a be
 
 # Week 3 - Data Cleaning Results
 After running the code with data cleaning implemented in the pipeline, the logistic regression model gap between the train accuracy and test accuracy increases from +0.001 to +0.019 (train accuracy of .679 to .676 and test from .678 to .657), and for the decision tree, the gap went from +0.197 to +0.181 (train accuracy of 0.829 to 0.792 and test from 0.632 to 0.611). Overall the logistic regression model is still between because the test accuracy is higher and the gap is smaller than the decision tree model, making it's generalization factor still better.
+
+# Week 4 - Data Processing Results
+After running the code on the 4 models (dummy, decision tree, logistic regression and random_forest), logistic regression is still the best model to pick out of all of them. With imputation, Encoding and Robust Scaling applied, the model achieved the highest test accuracy of 65,7%, on validation with a gap of +0.018.
