@@ -1,14 +1,7 @@
-"""
-Preprocessing -- deliberately minimal for week 2.
+"""Cleaning, feature preparation, and the development/test split.
 
-This is intentionally the weakest part of the pipeline:
-    - missing values are simply dropped (no imputation strategy)
-    - categorical columns are one-hot encoded with no thought given to unseen categories or cardinality
-    - a single train/test split is used (no cross-validation)
-
-You will replace this with something better in the coming weeks.
-
-One thing that is NOT naive, on purpose: `sensitive_attr` (race) is kept out of the model's input features entirely. It's split alongside the data so it's still available afterwards -- not to train on, but to check whether the model treats different groups differently. See src/evaluate.py:fairness_report.
+The sensitive attribute stays out of model inputs and remains available for
+the final fairness report. Learned preprocessing is fit inside each CV fold.
 """
 import numpy as np
 import pandas as pd
@@ -139,15 +132,13 @@ def build_preprocessor(preprocessing_config: dict) -> ColumnTransformer:
     ])
 
 
-def split_train_test(X, y, extras, test_size: float, random_state: int):
+def split_dev_test(X, y, extras, test_size: float, random_state: int):
     """
-    Stratified split of X, y, and the extras frame (race/score_text, kept aside for the
-    fairness report) together, so all three stay row-aligned. This is the leak-safe
-    boundary line -- everything downstream (imputation, encoding, scaling, inside
-    build_preprocessor's ColumnTransformer) may only ever be fit on X_train, never on
-    X_test or the full dataset.
+    Stratified split of X, y, and the extras frame together, preserving row
+    alignment. Cross-validation uses development rows only; the final test
+    rows are reserved for assessment after model selection.
     """
-    X_train, X_test, y_train, y_test, extras_train, extras_test = train_test_split(
+    X_dev, X_test, y_dev, y_test, extras_dev, extras_test = train_test_split(
         X, y, extras, test_size=test_size, random_state=random_state, stratify=y
     )
-    return X_train, X_test, y_train, y_test, extras_train, extras_test
+    return X_dev, X_test, y_dev, y_test, extras_dev, extras_test

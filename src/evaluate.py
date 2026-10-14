@@ -1,6 +1,34 @@
-"""Evaluation -- single train/test split, no cross-validation (yet)."""
+"""Cross-validation and final held-out evaluation."""
 import pandas as pd
 from sklearn.metrics import accuracy_score, classification_report
+from sklearn.model_selection import cross_validate
+
+
+def cross_validate_pipeline(pipeline, X, y, cv, scoring="accuracy", n_jobs=1):
+    """Score the entire preprocessing-and-model pipeline on each development fold."""
+    scores = cross_validate(
+        pipeline, X, y, cv=cv, scoring=scoring,
+        return_train_score=True, n_jobs=n_jobs, error_score="raise",
+    )
+    folds = pd.DataFrame({
+        "fold": range(1, len(scores["test_score"]) + 1),
+        "train": scores["train_score"],
+        "validation": scores["test_score"],
+    })
+    folds["gap"] = folds["train"] - folds["validation"]
+    return folds
+
+
+def comparison_report(comparisons, scoring):
+    """Show candidate models ranked by mean validation score."""
+    lines = [
+        f"Model comparison ({scoring}; same folds for every model)",
+        "",
+        comparisons.to_string(index=False, float_format=lambda value: f"{value:.3f}"),
+    ]
+    text = "\n".join(lines)
+    print(text)
+    return text
 
 
 def evaluate(y_train, y_train_pred, y_test, y_pred) -> str:

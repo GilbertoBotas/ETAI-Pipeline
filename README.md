@@ -39,6 +39,8 @@ This table is updated after each practical class, so you can always see what cha
 | Week | Practical class focus | Added to the pipeline |
 |------|------------------------|------------------------|
 | 2 | Introduction & baseline pipeline | Initial version: project structure, a single naive train/test split (no cross-validation), minimal preprocessing (drop rows with missing values, one-hot encode categoricals), logistic regression baseline, a first (deliberately simple) fairness check comparing our model's and COMPAS's own false-positive rate by race, train-vs-test accuracy reporting (to start spotting overfitting), and each run's full report saved automatically to `results/` |
+| 3 | Data diagnosis and preprocessing | Clean invalid values and categories; impute, encode, and scale features within the model pipeline. |
+| 4 | Cross-validation and model comparison | Compare four complete preprocessing-and-model pipelines on the same five stratified folds of the development set. Select by mean validation accuracy, refit on all development rows, then report the held-out test result. |
 
 ## Environment setup
 
@@ -98,13 +100,14 @@ folder, on any OS:
 python main.py
 ```
 
-This loads `config.yaml`, loads and preprocesses the data, trains the model, and prints:
-- **train accuracy and test accuracy, side by side.** Comparing the two is how you catch overfitting: if the model looks much better on the data it was trained on than on data it's never seen, it has memorised rather than learned something that generalises. 
+This loads `config.yaml`, cleans the data, separates the test rows, and prints:
+- a cross-validation comparison of all candidates in `config.yaml`'s `models` list, including mean validation accuracy, standard deviation across folds, and the mean train-validation gap
+- **train accuracy and test accuracy** for the candidate selected by mean cross-validation accuracy
 - a classification report on the test set
 - a false-positive-rate-by-race comparison between our model and
   COMPAS's own score
 
-All of this is also saved to a timestamped file in `results/` (e.g.`results/run_20260916_143012.txt`), so it doesn't just scroll past in your terminal -- open it later, or change something in `config.yaml` (like the model type) and compare the new file to the last one.
+All of this, plus each model's individual fold scores, is saved to a timestamped file in `results/` (e.g. `results/run_20260916_143012.txt`). Adjust the candidates in `config.yaml`'s `models` list to compare a different set. Keep the `test_set` settings fixed, and use the cross-validation scores for model choices rather than the test score.
 `results/` is created automatically the first time you run the
 pipeline, and isn't tracked in git (see `.gitignore`) since it's
 generated output, not source.
@@ -123,3 +126,18 @@ After running the code with data cleaning implemented in the pipeline, the logis
 
 # Week 4 - Data Processing Results
 After running the code on the 4 models (dummy, decision tree, logistic regression and random_forest), logistic regression is still the best model to pick out of all of them. With imputation, Encoding and Robust Scaling applied, the model achieved the highest test accuracy of 65,7%, on validation with a gap of +0.018.
+
+# Cross-Validation Results
+
+The development set is evaluated with the same five stratified folds for every model. Preprocessing is inside the pipeline, so each fold learns its imputation, encoding, and scaling only from that fold's training rows. The model with the highest mean validation accuracy is refit on all development rows before one held-out test evaluation.
+
+| Model | CV accuracy (mean ± sample SD) | Mean train–validation gap |
+|---|---:|---:|
+| Dummy | 0.549 ± 0.000 | 0.000 |
+| Logistic regression | **0.673 ± 0.014** | 0.002 |
+| Decision tree | 0.625 ± 0.017 | 0.176 |
+| Random forest | 0.631 ± 0.016 | 0.170 |
+
+Logistic regression has the best mean validation accuracy and a small train–validation gap. The selected model scored 0.657 on the held-out test set. The tree models have much larger gaps, suggesting overfitting. These numbers use accuracy, so the classification report and false-positive rates should also be considered when judging practical performance.
+
+**Methodological note:** Earlier weeks already inspected the same test split and used repeated splits to select preprocessing. This test result is useful for the class comparison, but it is not a fully untouched final estimate. Future choices should be made from development-set cross-validation only; a genuinely new external dataset would be needed for a fresh final estimate.

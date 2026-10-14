@@ -7,9 +7,19 @@ data:
   sensitive_attr: "race"          # excluded from model features, used only to audit fairness
   drop_columns: ["id", "decile_score", "score_text", "prior_offenses", "age_in_months", "juvenile_total"]
 
-split:
-  test_size: 0.2
+# Keep these values fixed when comparing models. The test rows are used only
+# after cross-validation has selected a model.
+test_set:
+  size: 0.2
   random_state: 42
+
+# Every candidate uses these same development-set folds and scoring rule.
+cv:
+  n_splits: 5
+  shuffle: true
+  random_state: 42
+  scoring: "accuracy"
+  n_jobs: 1
 
 # New this week (see Practical/W3/notebooks/01_eda_introduction.ipynb): what src/data_diagnostics.py
 # and src/preprocessing.py need to stay generic instead of hardcoding COMPAS's column names.
@@ -64,10 +74,15 @@ preprocessing:
     numeric_strategy: "median"        # applies to age, juv_fel_count, juv_misd_count, juv_other_count, priors_count
     categorical_strategy: "most_frequent"   # applies to sex, age_cat, c_charge_degree
 
-model:
-  type: "random_forest"   # or "dummy, decision_tree, logistic_regression, random_forest"
-  params: {}
-    # max_iter: 1000
+models:
+  - type: "dummy"
+    params: {}
+  - type: "logistic_regression"
+    params: {max_iter: 2000}
+  - type: "decision_tree"
+    params: {random_state: 42}
+  - type: "random_forest"
+    params: {random_state: 42}
 
 output:
   results_dir: "results"   # each run's full report is saved here as a timestamped .txt file
