@@ -65,6 +65,17 @@ def add_missingness_indicators(df: pd.DataFrame, mnar_indicator_sources: list) -
     return out
 
 
+def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Add fixed-formula features without learning statistics from any rows."""
+    out = df.copy()
+    adult_years = (out["age"] - 17).clip(lower=1)
+    out["priors_per_adult_year"] = out["priors_count"] / adult_years
+    juvenile_cols = ["juv_fel_count", "juv_misd_count", "juv_other_count"]
+    out["juvenile_offense_total"] = out[juvenile_cols].sum(axis=1, min_count=3)
+    out["age_priors_interaction"] = out["age"] * out["priors_count"]
+    return out
+
+
 def split_features_target(df: pd.DataFrame, data_config: dict, mnar_indicator_sources: list):
     """
     Returns (X, y, extras). `y` is `None` and `extras` has no target column when called

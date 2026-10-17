@@ -14,7 +14,7 @@ import yaml
 from sklearn.model_selection import StratifiedKFold
 
 from src.data import load_data
-from src.preprocessing import clean_dataset, split_features_target, split_dev_test
+from src.preprocessing import add_engineered_features, clean_dataset, split_features_target, split_dev_test
 from src.model import build_pipeline
 from src.evaluate import cross_validate_pipeline, comparison_report, evaluate, fairness_report
 from src.results import save_run
@@ -33,6 +33,15 @@ def main():
 
     df_raw = load_data(config["data"]["path"])
     df_clean = clean_dataset(df_raw, config["diagnostics"])
+    feature_config = config.get("feature_engineering", {})
+    if feature_config.get("enabled", False):
+        df_clean = add_engineered_features(df_clean)
+    else:
+        engineered = set(feature_config.get("columns", []))
+        config["preprocessing"]["numeric_features"] = [
+            column for column in config["preprocessing"]["numeric_features"]
+            if column not in engineered
+        ]
 
     mnar_sources = config["preprocessing"].get("mnar_indicator_sources", [])
     X, y, extras = split_features_target(df_clean, config["data"], mnar_sources)

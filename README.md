@@ -43,6 +43,7 @@ This table is updated after each practical class, so you can always see what cha
 | 3 | Data diagnosis and preprocessing | Clean invalid values and categories; impute, encode, and scale features within the model pipeline. |
 | 4 | Cross-validation and model comparison | Compare four complete preprocessing-and-model pipelines on the same five stratified folds of the development set. Select by mean validation accuracy, refit on all development rows, then report the held-out test result. |
 | 5 | Hyperparameter tuning | Search model settings with Optuna inside three-fold CV, and compare each tuning procedure with five outer folds. Refit the selected settings on all development rows. |
+| 6 | Ensembles and feature challenges | Add an oblique forest and AdaBoost, tune the ensemble candidates, then check three fixed-formula features and AdaBoost with a logistic base learner. |
 
 ## Environment setup
 
@@ -161,3 +162,38 @@ For each model, the inner three folds chose the settings and the outer five fold
 The two tree models improved quite a lot after tuning. The decision tree went from 0.625 to 0.674, and the random forest from 0.631 to 0.681. Logistic regression barely changed. The random forest came first, although the difference from the other two models is small compared with how much the scores vary between folds. I would call it the best model in this run, but not a clear winner in general.
 
 The final search chose a random forest with `n_estimators=50`, `max_depth=12`, `min_samples_leaf=46` and `max_features=0.5`. After training it on all the development rows, I got 0.673 accuracy on the test split. We had already looked at this same test split in earlier practicals, so I would use the nested-CV scores for the comparison rather than treat the test score as a completely fresh estimate. The full fold scores and reports are in `results/`.
+
+# Week 6 - Ensembles and Challenges
+
+This week I added AdaBoost and a simple oblique forest. The oblique forest is the notebook's scikit-learn construction: each bagged tree sees its own sparse random projection of the features. It is not the `treeple` implementation of SPORF. Both models still go through the same preprocessing pipeline and cross-validation as the earlier models.
+
+I ran six Optuna trials per tuned model, with three inner and five outer folds. This smaller budget kept the run manageable tonight; the settings may change with a wider search. Every model used the same outer folds and the same three engineered features listed below.
+
+| Model | Default CV mean ± SD (gap) | Tuned nested CV mean ± SD (gap) | Best trial's inner score | Final chosen settings |
+|---|---:|---:|---:|---|
+| Dummy | 0.549 ± 0.000 (0.000) | 0.549 ± 0.000 (0.000) | — | None |
+| Logistic regression | 0.675 ± 0.010 (0.001) | 0.675 ± 0.012 (0.001) | 0.676 | `C=0.0177` |
+| Decision tree | 0.630 ± 0.015 (0.172) | 0.673 ± 0.006 (0.010) | 0.675 | depth 4, leaf 1, entropy |
+| Random forest | 0.632 ± 0.015 (0.171) | 0.676 ± 0.010 (0.019) | 0.677 | 100 trees, depth 4, leaf 2, `max_features=sqrt` |
+| Oblique random forest | 0.641 ± 0.010 (0.161) | **0.677 ± 0.013 (0.010)** | 0.678 | 50 trees, 8 projected features, depth 9, leaf 77 |
+| AdaBoost | 0.671 ± 0.009 (0.007) | 0.673 ± 0.008 (0.015) | 0.675 | depth 2, 94 rounds, learning rate 0.391 |
+
+The oblique forest ranks first by mean outer-fold accuracy, so it is the model selected by the pipeline. Its lead over the ordinary forest is only 0.001, far smaller than either model's fold-to-fold standard deviation. I would report **0.677 ± 0.013 nested-CV accuracy** as the estimate for this tuned oblique-forest procedure, while saying plainly that these models are too close to call a clear overall winner. The selected forest got 0.674 on the reused test split. The chosen tree settings make sense on this dataset: both forests restrict tree size rather than leaving every tree fully grown. The full fold scores and classification and fairness reports are in `results/`.
+
+## Challenge 1: fixed-formula features
+
+I added `priors_per_adult_year` from the notebook, plus `juvenile_offense_total` (the sum of the three juvenile counts) and `age_priors_interaction` (age multiplied by prior count). These formulas use values from each row only. They do not need a mean, category frequency, or any other statistic learned from the dataset, so I can calculate them before the split. Missing inputs remain missing and are imputed inside each training fold.
+
+For a quick challenge check, I compared each model with and without these columns using the same three outer folds, two inner folds and four Optuna trials. These are smaller runs than the main comparison, so I treat the differences as exploratory.
+
+| Model | Without features | With features | Difference |
+|---|---:|---:|---:|
+| Logistic regression | 0.672 ± 0.010 | 0.675 ± 0.007 | +0.003 |
+| Random forest | 0.679 ± 0.011 | 0.676 ± 0.002 | -0.003 |
+| AdaBoost | 0.680 ± 0.014 | 0.674 ± 0.005 | -0.006 |
+
+Logistic regression gained a little. The ensembles did not, and none of the differences is larger than the fold-to-fold variation. The three extra features stay in the pipeline as an experiment, but this run does not give me a strong reason to expect them to improve an ensemble.
+
+## Challenge 2: boosting logistic regression
+
+On the same three development folds, ordinary logistic regression scored 0.674 ± 0.005 and AdaBoost with logistic regression as its base learner scored 0.673 ± 0.010. Boosting did not help here. A weighted sum of linear *scores* would still be linear; AdaBoost combines the base classifiers' hard votes, so its boundary need not be one straight line. In this dataset, that extra flexibility did not improve accuracy in this small check.

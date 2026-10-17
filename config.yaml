@@ -67,12 +67,16 @@ diagnostics:
 preprocessing:
   encoder: "target"      # winner of the 4x4 empirical grid (onehot/ordinal/count/target x none/standard/minmax/robust),
   scaler: "robust"     # scored on accuracy across 15 repeated splits -- see 02_preprocessing.ipynb's grid + paired check
-  numeric_features: ["age", "juv_fel_count", "juv_misd_count", "juv_other_count", "priors_count"]
+  numeric_features: ["age", "juv_fel_count", "juv_misd_count", "juv_other_count", "priors_count", "priors_per_adult_year", "juvenile_offense_total", "age_priors_interaction"]
   categorical_features: ["sex", "age_cat", "c_charge_degree"]
   mnar_indicator_sources: ["priors_count", "c_charge_degree"]
   imputation:
     numeric_strategy: "median"        # applies to age, juv_fel_count, juv_misd_count, juv_other_count, priors_count
     categorical_strategy: "most_frequent"   # applies to sex, age_cat, c_charge_degree
+
+feature_engineering:
+  enabled: true
+  columns: ["priors_per_adult_year", "juvenile_offense_total", "age_priors_interaction"]
 
 models:
   - type: "dummy"
@@ -83,6 +87,10 @@ models:
     params: {random_state: 42}
   - type: "random_forest"
     params: {random_state: 42, n_jobs: -1}
+  - type: "oblique_random_forest"
+    params: {n_estimators: 50, n_components: 10, random_state: 42, n_jobs: -1}
+  - type: "adaboost"
+    params: {max_depth: 1, n_estimators: 50, learning_rate: 1.0, random_state: 42}
 
 # Inner CV chooses hyperparameters; the five outer cv folds above estimate how
 # well the complete tuning procedure performs. More trials/folds cost more fits.
@@ -91,9 +99,11 @@ tuning:
   n_splits: 3
   random_state: 42
   n_trials:
-    logistic_regression: 20
-    decision_tree: 30
-    random_forest: 15
+    logistic_regression: 6
+    decision_tree: 6
+    random_forest: 6
+    oblique_random_forest: 6
+    adaboost: 6
   search_spaces:
     logistic_regression:
       model__C: {type: float, low: 0.0001, high: 100.0, log: true}
@@ -106,6 +116,14 @@ tuning:
       model__max_depth: {type: categorical, choices: [4, 8, 12, null]}
       model__min_samples_leaf: {type: int, low: 1, high: 50, log: true}
       model__max_features: {type: categorical, choices: ["sqrt", "log2", 0.5]}
+    oblique_random_forest:
+      model__estimator__tree__max_depth: {type: int, low: 2, high: 20}
+      model__estimator__tree__min_samples_leaf: {type: int, low: 1, high: 100, log: true}
+      model__estimator__project__n_components: {type: int, low: 3, high: 10}
+    adaboost:
+      model__estimator__max_depth: {type: int, low: 1, high: 5}
+      model__n_estimators: {type: int, low: 25, high: 100, log: true}
+      model__learning_rate: {type: float, low: 0.03, high: 1.0, log: true}
 
 output:
   results_dir: "results"   # each run's full report is saved here as a timestamped .txt file
