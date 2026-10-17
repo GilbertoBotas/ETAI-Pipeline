@@ -7,7 +7,10 @@ import os
 from datetime import datetime
 
 
-def save_run(results_dir: str, config: dict, report_text: str, selected_model: dict) -> str:
+def save_run(
+    results_dir: str, config: dict, report_text: str,
+    selected_model: dict, tuned_params: dict | None = None,
+) -> str:
     """
     Writes one run's full report to a timestamped .txt file inside
     `results_dir` (created automatically if it doesn't exist yet) and
@@ -21,10 +24,13 @@ def save_run(results_dir: str, config: dict, report_text: str, selected_model: d
     header = (
         f"Run: {timestamp}\n"
         f"Selected model: {selected_model['type']}  params={selected_model.get('params', {})}\n"
+        f"Tuned parameters: {tuned_params or {}}\n"
         f"Test size: {config['test_set']['size']}  "
         f"random_state: {config['test_set']['random_state']}\n"
         f"CV: {config['cv']['n_splits']} stratified folds, "
         f"scoring={config['cv']['scoring']}, random_state={config['cv']['random_state']}\n"
+        f"Tuning: enabled={config.get('tuning', {}).get('enabled', False)}, "
+        f"inner_folds={config.get('tuning', {}).get('n_splits', 'n/a')}\n"
         + "=" * 60 + "\n\n"
     )
 

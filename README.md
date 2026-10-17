@@ -22,9 +22,10 @@ go on.
 ├── requirements.txt
 ├── src/
 │   ├── data.py             # loading
-│   ├── preprocessing.py    # cleaning + train/test split
-│   ├── model.py             # model construction
-│   ├── evaluate.py         # accuracy metrics + fairness check
+│   ├── preprocessing.py    # cleaning + development/test split
+│   ├── model.py             # model and full pipeline construction
+│   ├── evaluate.py         # default-model CV + final evaluation
+│   ├── tuning.py           # Optuna search + nested CV
 │   └── results.py          # saves each run's report to disk
 ├── results/                # created automatically -- one file per run (not tracked in git)
 └── data/
@@ -41,6 +42,7 @@ This table is updated after each practical class, so you can always see what cha
 | 2 | Introduction & baseline pipeline | Initial version: project structure, a single naive train/test split (no cross-validation), minimal preprocessing (drop rows with missing values, one-hot encode categoricals), logistic regression baseline, a first (deliberately simple) fairness check comparing our model's and COMPAS's own false-positive rate by race, train-vs-test accuracy reporting (to start spotting overfitting), and each run's full report saved automatically to `results/` |
 | 3 | Data diagnosis and preprocessing | Clean invalid values and categories; impute, encode, and scale features within the model pipeline. |
 | 4 | Cross-validation and model comparison | Compare four complete preprocessing-and-model pipelines on the same five stratified folds of the development set. Select by mean validation accuracy, refit on all development rows, then report the held-out test result. |
+| 5 | Hyperparameter tuning | Search model settings with Optuna inside three-fold CV, and compare each tuning procedure with five outer folds. Refit the selected settings on all development rows. |
 
 ## Environment setup
 
@@ -101,13 +103,14 @@ python main.py
 ```
 
 This loads `config.yaml`, cleans the data, separates the test rows, and prints:
-- a cross-validation comparison of all candidates in `config.yaml`'s `models` list, including mean validation accuracy, standard deviation across folds, and the mean train-validation gap
-- **train accuracy and test accuracy** for the candidate selected by mean cross-validation accuracy
+- a five-fold cross-validation comparison of the default models in `config.yaml`'s `models` list
+- when `tuning.enabled` is true, a nested cross-validation comparison of tuned models; inner folds choose hyperparameters, outer folds evaluate the tuning procedure
+- **train accuracy and test accuracy** for the candidate selected by mean nested-CV accuracy
 - a classification report on the test set
 - a false-positive-rate-by-race comparison between our model and
   COMPAS's own score
 
-All of this, plus each model's individual fold scores, is saved to a timestamped file in `results/` (e.g. `results/run_20260916_143012.txt`). Adjust the candidates in `config.yaml`'s `models` list to compare a different set. Keep the `test_set` settings fixed, and use the cross-validation scores for model choices rather than the test score.
+All of this, plus each model's individual fold scores, search results and selected hyperparameters, is saved to a timestamped file in `results/` (e.g. `results/run_20261017_232940.txt`). Adjust `models` and `tuning.search_spaces` in `config.yaml` to change candidates. `tuning.n_trials` controls the search budget per model; `tuning.n_splits` controls the inner folds. Set `tuning.enabled: false` to reproduce the Week 4 default-model workflow. Keep the `test_set` settings fixed, and use the nested-CV scores for model choices rather than the test score.
 `results/` is created automatically the first time you run the
 pipeline, and isn't tracked in git (see `.gitignore`) since it's
 generated output, not source.
@@ -141,3 +144,20 @@ The development set is evaluated with the same five stratified folds for every m
 Logistic regression has the best mean validation accuracy and a small train–validation gap. The selected model scored 0.657 on the held-out test set. The tree models have much larger gaps, suggesting overfitting. These numbers use accuracy, so the classification report and false-positive rates should also be considered when judging practical performance.
 
 **Methodological note:** Earlier weeks already inspected the same test split and used repeated splits to select preprocessing. This test result is useful for the class comparison, but it is not a fully untouched final estimate. Future choices should be made from development-set cross-validation only; a genuinely new external dataset would be needed for a fresh final estimate.
+
+# Week 5 - Hyperparameter Tuning Results
+
+This week I wanted to find out whether the trees did badly in Week 4 because of the algorithms themselves or because I had left their settings at the defaults. I used Optuna to try different settings for the decision tree, random forest and logistic regression. I left the dummy classifier as a baseline.
+
+For each model, the inner three folds chose the settings and the outer five folds measured how well that tuning process worked on unseen rows. I compared models using the outer scores. The best Optuna trial is useful for choosing settings, but its score is likely to look a little too good after trying many options.
+
+| Model | Default CV mean ± SD | Tuned nested CV mean ± SD | Mean train–validation gap | Trials |
+|---|---:|---:|---:|---:|
+| Dummy | 0.549 ± 0.000 | 0.549 ± 0.000 | 0.000 | 0 |
+| Logistic regression | 0.673 ± 0.014 | 0.672 ± 0.016 | 0.004 | 20 |
+| Decision tree | 0.625 ± 0.017 | 0.674 ± 0.010 | 0.011 | 30 |
+| Random forest | 0.631 ± 0.016 | **0.681 ± 0.014** | 0.008 | 15 |
+
+The two tree models improved quite a lot after tuning. The decision tree went from 0.625 to 0.674, and the random forest from 0.631 to 0.681. Logistic regression barely changed. The random forest came first, although the difference from the other two models is small compared with how much the scores vary between folds. I would call it the best model in this run, but not a clear winner in general.
+
+The final search chose a random forest with `n_estimators=50`, `max_depth=12`, `min_samples_leaf=46` and `max_features=0.5`. After training it on all the development rows, I got 0.673 accuracy on the test split. We had already looked at this same test split in earlier practicals, so I would use the nested-CV scores for the comparison rather than treat the test score as a completely fresh estimate. The full fold scores and reports are in `results/`.
