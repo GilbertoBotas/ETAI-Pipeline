@@ -165,9 +165,9 @@ The final search chose a random forest with `n_estimators=50`, `max_depth=12`, `
 
 # Week 6 - Ensembles and Challenges
 
-This week I added AdaBoost and a simple oblique forest. The oblique forest is the notebook's scikit-learn construction: each bagged tree sees its own sparse random projection of the features. It is not the `treeple` implementation of SPORF. Both models still go through the same preprocessing pipeline and cross-validation as the earlier models.
+For Week 6 I added AdaBoost and an oblique forest to the models I was already comparing. I kept the same data split and preprocessing pipeline, so the comparison follows the setup from Week 5. My oblique forest uses the notebook's random-projection approach with scikit-learn; it is not the `treeple` SPORF model.
 
-I ran six Optuna trials per tuned model, with three inner and five outer folds. This smaller budget kept the run manageable tonight; the settings may change with a wider search. Every model used the same outer folds and the same three engineered features listed below.
+I used six Optuna trials per model, three folds to choose the settings, and five outer folds to compare the results. Six trials is a small search, so I see this as a first comparison rather than the final word on any model. All models used the same outer folds and the three features described below.
 
 | Model | Default CV mean ± SD (gap) | Tuned nested CV mean ± SD (gap) | Best trial's inner score | Final chosen settings |
 |---|---:|---:|---:|---|
@@ -178,13 +178,13 @@ I ran six Optuna trials per tuned model, with three inner and five outer folds. 
 | Oblique random forest | 0.641 ± 0.010 (0.161) | **0.677 ± 0.013 (0.010)** | 0.678 | 50 trees, 8 projected features, depth 9, leaf 77 |
 | AdaBoost | 0.671 ± 0.009 (0.007) | 0.673 ± 0.008 (0.015) | 0.675 | depth 2, 94 rounds, learning rate 0.391 |
 
-The oblique forest ranks first by mean outer-fold accuracy, so it is the model selected by the pipeline. Its lead over the ordinary forest is only 0.001, far smaller than either model's fold-to-fold standard deviation. I would report **0.677 ± 0.013 nested-CV accuracy** as the estimate for this tuned oblique-forest procedure, while saying plainly that these models are too close to call a clear overall winner. The selected forest got 0.674 on the reused test split. The chosen tree settings make sense on this dataset: both forests restrict tree size rather than leaving every tree fully grown. The full fold scores and classification and fairness reports are in `results/`.
+The oblique forest came first, and the pipeline selected it. But it beat the ordinary random forest by only 0.001. That difference is much smaller than the variation across folds, so I would not say it has clearly won. If I need to report one number for the selected model, I would use its **0.677 ± 0.013 nested-CV accuracy**. It scored 0.674 on the test split, although we had already seen that split in earlier weeks. Both tuned forests ended up limiting the size of their trees, which fits what we saw when the default forests overfit. The detailed scores and fairness report are in `results/`.
 
 ## Challenge 1: fixed-formula features
 
-I added `priors_per_adult_year` from the notebook, plus `juvenile_offense_total` (the sum of the three juvenile counts) and `age_priors_interaction` (age multiplied by prior count). These formulas use values from each row only. They do not need a mean, category frequency, or any other statistic learned from the dataset, so I can calculate them before the split. Missing inputs remain missing and are imputed inside each training fold.
+I added the notebook's `priors_per_adult_year` feature and tried two more: `juvenile_offense_total`, which adds the three juvenile counts, and `age_priors_interaction`, which multiplies age by the number of priors. None of these calculations needs information from other rows, so I can do them before splitting the data. If an input is missing, the new value stays missing and the pipeline imputes it inside the training fold.
 
-For a quick challenge check, I compared each model with and without these columns using the same three outer folds, two inner folds and four Optuna trials. These are smaller runs than the main comparison, so I treat the differences as exploratory.
+I compared the models with and without these features using the same three outer folds. To keep this challenge run short, I used two inner folds and four tuning trials per model.
 
 | Model | Without features | With features | Difference |
 |---|---:|---:|---:|
@@ -192,8 +192,8 @@ For a quick challenge check, I compared each model with and without these column
 | Random forest | 0.679 ± 0.011 | 0.676 ± 0.002 | -0.003 |
 | AdaBoost | 0.680 ± 0.014 | 0.674 ± 0.005 | -0.006 |
 
-Logistic regression gained a little. The ensembles did not, and none of the differences is larger than the fold-to-fold variation. The three extra features stay in the pipeline as an experiment, but this run does not give me a strong reason to expect them to improve an ensemble.
+Logistic regression improved by 0.003, while both ensembles did slightly worse. Those changes are smaller than the fold-to-fold variation, so I cannot make a strong claim that the features helped or hurt. I have left them in the pipeline for now, but I would test them with a larger search before relying on them.
 
 ## Challenge 2: boosting logistic regression
 
-On the same three development folds, ordinary logistic regression scored 0.674 ± 0.005 and AdaBoost with logistic regression as its base learner scored 0.673 ± 0.010. Boosting did not help here. A weighted sum of linear *scores* would still be linear; AdaBoost combines the base classifiers' hard votes, so its boundary need not be one straight line. In this dataset, that extra flexibility did not improve accuracy in this small check.
+I also tried AdaBoost with logistic regression as the base learner. Ordinary logistic regression scored 0.674 ± 0.005; the boosted version scored 0.673 ± 0.010 on the same three folds. I do not see an improvement. A weighted sum of linear scores would still be linear, but AdaBoost combines the classifiers' votes, which can make a more complicated boundary. That flexibility did not pay off in this small run.
