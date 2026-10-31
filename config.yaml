@@ -13,13 +13,22 @@ test_set:
   size: 0.2
   random_state: 42
 
-# Every candidate uses these same development-set folds and scoring rule.
+# Every candidate uses these same development-set folds and selection metric.
 cv:
   n_splits: 5
   shuffle: true
   random_state: 42
-  scoring: "accuracy"
+  metrics: ["accuracy", "balanced_accuracy", "precision", "recall", "f1", "fbeta_2", "roc_auc", "average_precision"]
+  selection_metric: "roc_auc"
   n_jobs: 1
+
+# Chosen on development-set out-of-fold probabilities after model comparison.
+# ROC-AUC itself does not depend on a threshold.
+threshold:
+  objective: "balanced_accuracy"
+  min: 0.20
+  max: 0.80
+  step: 0.01
 
 # New this week (see Practical/W3/notebooks/01_eda_introduction.ipynb): what src/data_diagnostics.py
 # and src/preprocessing.py need to stay generic instead of hardcoding COMPAS's column names.
@@ -82,15 +91,21 @@ models:
   - type: "dummy"
     params: {}
   - type: "logistic_regression"
-    params: {max_iter: 2000}
+    params: {max_iter: 2000, class_weight: "balanced"}
   - type: "decision_tree"
-    params: {random_state: 42}
+    params: {random_state: 42, class_weight: "balanced"}
   - type: "random_forest"
-    params: {random_state: 42, n_jobs: -1}
+    params: {random_state: 42, n_jobs: -1, class_weight: "balanced"}
   - type: "oblique_random_forest"
-    params: {n_estimators: 50, n_components: 10, random_state: 42, n_jobs: -1}
+    params: {n_estimators: 50, n_components: 10, random_state: 42, n_jobs: -1, class_weight: "balanced"}
   - type: "adaboost"
     params: {max_depth: 1, n_estimators: 50, learning_rate: 1.0, random_state: 42}
+  - type: "gradient_boosting"
+    params: {random_state: 42}
+  - type: "hist_gradient_boosting"
+    params: {random_state: 42, class_weight: "balanced"}
+  - type: "naive_bayes"
+    params: {}
 
 # Inner CV chooses hyperparameters; the five outer cv folds above estimate how
 # well the complete tuning procedure performs. More trials/folds cost more fits.
@@ -104,6 +119,9 @@ tuning:
     random_forest: 6
     oblique_random_forest: 6
     adaboost: 6
+    gradient_boosting: 6
+    hist_gradient_boosting: 6
+    naive_bayes: 6
   search_spaces:
     logistic_regression:
       model__C: {type: float, low: 0.0001, high: 100.0, log: true}
@@ -124,6 +142,20 @@ tuning:
       model__estimator__max_depth: {type: int, low: 1, high: 5}
       model__n_estimators: {type: int, low: 25, high: 100, log: true}
       model__learning_rate: {type: float, low: 0.03, high: 1.0, log: true}
+    gradient_boosting:
+      model__n_estimators: {type: int, low: 25, high: 500, log: true}
+      model__learning_rate: {type: float, low: 0.01, high: 0.5, log: true}
+      model__max_depth: {type: int, low: 1, high: 6}
+      model__min_samples_leaf: {type: int, low: 1, high: 200, log: true}
+      model__subsample: {type: float, low: 0.5, high: 1.0}
+    hist_gradient_boosting:
+      model__max_iter: {type: int, low: 25, high: 500, log: true}
+      model__learning_rate: {type: float, low: 0.01, high: 0.5, log: true}
+      model__max_leaf_nodes: {type: int, low: 2, high: 63, log: true}
+      model__min_samples_leaf: {type: int, low: 5, high: 200, log: true}
+      model__l2_regularization: {type: float, low: 0.000001, high: 10.0, log: true}
+    naive_bayes:
+      model__var_smoothing: {type: float, low: 0.000000000001, high: 0.1, log: true}
 
 output:
-  results_dir: "results"   # each run's full report is saved here as a timestamped .txt file
+  scoreboard: "results/runs.csv"   # one queryable CSV for every candidate and run

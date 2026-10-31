@@ -1,15 +1,13 @@
 """Run the two optional Week 6 challenges with a small reproducible budget."""
 
 from copy import deepcopy
-from pathlib import Path
-
 import optuna
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
 
 from main import load_config
 from src.data import load_data
-from src.evaluate import cross_validate_pipeline
+from src.evaluate import build_scorers, cross_validate_pipeline
 from src.model import build_pipeline
 from src.preprocessing import (
     add_engineered_features, clean_dataset, split_dev_test, split_features_target,
@@ -31,6 +29,7 @@ def main():
 
     outer = StratifiedKFold(3, shuffle=True, random_state=42)
     inner = StratifiedKFold(2, shuffle=True, random_state=42)
+    scorers = build_scorers(["accuracy"])
     no_features = deepcopy(config["preprocessing"])
     added = set(config["feature_engineering"]["columns"])
     no_features["numeric_features"] = [
@@ -48,7 +47,7 @@ def main():
             print(f"Challenge 1: {name} {label} engineered features", flush=True)
             folds, _ = nested_cross_validate(
                 build_pipeline(prep, model), X_dev, y_dev, outer, inner,
-                "accuracy", config["tuning"]["search_spaces"][name],
+                scorers, "accuracy", config["tuning"]["search_spaces"][name],
                 4, 42,
             )
             rows.append({
@@ -66,8 +65,9 @@ def main():
     logistic = next(item for item in config["models"] if item["type"] == "logistic_regression")
     boosted_rows = []
     for label, model in [("logistic_regression", logistic), ("adaboost_logistic", boosted)]:
-        folds = cross_validate_pipeline(
-            build_pipeline(config["preprocessing"], model), X_dev, y_dev, outer
+        folds, _ = cross_validate_pipeline(
+            build_pipeline(config["preprocessing"], model), X_dev, y_dev,
+            outer, scorers, "accuracy"
         )
         boosted_rows.append({
             "model": label,
@@ -77,10 +77,6 @@ def main():
         })
     boost_table = pd.DataFrame(boosted_rows)
 
-    output = Path(config["output"]["results_dir"])
-    output.mkdir(exist_ok=True)
-    features_table.to_csv(output / "week6_feature_challenge.csv", index=False)
-    boost_table.to_csv(output / "week6_boosted_logistic.csv", index=False)
     print("\nChallenge 1\n", features_table.to_string(index=False), flush=True)
     print("\nChallenge 2\n", boost_table.to_string(index=False), flush=True)
 

@@ -4,7 +4,6 @@ import numpy as np
 import optuna
 import pandas as pd
 from sklearn.base import clone
-from sklearn.metrics import get_scorer
 from sklearn.model_selection import cross_val_score
 
 
@@ -45,36 +44,39 @@ def tune_pipeline(pipeline, X, y, cv, scoring, search_space, n_trials, random_st
 
 
 def nested_cross_validate(
-    pipeline, X, y, outer_cv, inner_cv, scoring, search_space,
+    pipeline, X, y, outer_cv, inner_cv, scorers, selection_metric, search_space,
     n_trials, random_state, n_jobs=1,
 ):
-    """Estimate the tune-then-fit procedure on outer folds unseen by tuning."""
-    scorer = get_scorer(scoring)
+    """Estimate tuning on outer folds and retain out-of-fold probabilities."""
     rows = []
-    y_oof = np.empty(len(y), dtype=np.asarray(y).dtype)
+    oof_proba = np.full(len(y), np.nan)
 
     for fold, (train_idx, val_idx) in enumerate(outer_cv.split(X, y), start=1):
         X_train, y_train = X.iloc[train_idx], y.iloc[train_idx]
         X_val, y_val = X.iloc[val_idx], y.iloc[val_idx]
         tuned, study = tune_pipeline(
-            pipeline, X_train, y_train, inner_cv, scoring, search_space,
+            pipeline, X_train, y_train, inner_cv, scorers[selection_metric], search_space,
             n_trials, random_state, n_jobs,
         )
         tuned.fit(X_train, y_train)
-        train_score = scorer(tuned, X_train, y_train)
-        validation_score = scorer(tuned, X_val, y_val)
-        y_oof[val_idx] = tuned.predict(X_val)
+        train_score = scorers[selection_metric](tuned, X_train, y_train)
+        val_scores = {name: scorer(tuned, X_val, y_val) for name, scorer in scorers.items()}
+        validation_score = val_scores[selection_metric]
+        oof_proba[val_idx] = tuned.predict_proba(X_val)[:, 1]
         rows.append({
             "fold": fold,
             "train": train_score,
             "validation": validation_score,
             "gap": train_score - validation_score,
             "inner_best": study.best_value,
+            **val_scores,
             **study.best_params,
         })
         print(f"  outer fold {fold}: validation {validation_score:.3f}", flush=True)
 
-    return pd.DataFrame(rows), y_oof
+    if np.isnan(oof_proba).any():
+        raise ValueError("Outer folds did not predict every development row")
+    return pd.DataFrame(rows), oof_proba
 
 
 def tuning_report(study, nested_scores, scoring, top=5):

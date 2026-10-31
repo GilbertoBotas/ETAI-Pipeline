@@ -27,7 +27,7 @@ go on.
 │   ├── evaluate.py         # default-model CV + final evaluation
 │   ├── tuning.py           # Optuna search + nested CV
 │   └── results.py          # saves each run's report to disk
-├── results/                # created automatically -- one file per run (not tracked in git)
+├── results/                # runs.csv scoreboard; old text reports remain ignored
 └── data/
     ├── compas_two_year_recidivism.csv
     └── README.md            # problem description + full data dictionary
@@ -44,6 +44,7 @@ This table is updated after each practical class, so you can always see what cha
 | 4 | Cross-validation and model comparison | Compare four complete preprocessing-and-model pipelines on the same five stratified folds of the development set. Select by mean validation accuracy, refit on all development rows, then report the held-out test result. |
 | 5 | Hyperparameter tuning | Search model settings with Optuna inside three-fold CV, and compare each tuning procedure with five outer folds. Refit the selected settings on all development rows. |
 | 6 | Ensembles and feature challenges | Add an oblique forest and AdaBoost, tune the ensemble candidates, then check three fixed-formula features and AdaBoost with a logistic base learner. |
+| 7 | Boosting, probability metrics and scoreboard | Add gradient boosting, histogram gradient boosting and Naive Bayes; compare models by nested ROC-AUC, choose a decision threshold on development predictions, and save candidate runs in one CSV. |
 
 ## Environment setup
 
@@ -104,17 +105,13 @@ python main.py
 ```
 
 This loads `config.yaml`, cleans the data, separates the test rows, and prints:
-- a five-fold cross-validation comparison of the default models in `config.yaml`'s `models` list
-- when `tuning.enabled` is true, a nested cross-validation comparison of tuned models; inner folds choose hyperparameters, outer folds evaluate the tuning procedure
-- **train accuracy and test accuracy** for the candidate selected by mean nested-CV accuracy
-- a classification report on the test set
-- a false-positive-rate-by-race comparison between our model and
-  COMPAS's own score
+- the default and tuned nested-CV scores for every configured model, using ROC-AUC to choose one
+- the decision threshold chosen from development-set out-of-fold probabilities
+- all eight metrics on the test split for the selected model only
 
-All of this, plus each model's individual fold scores, search results and selected hyperparameters, is saved to a timestamped file in `results/` (e.g. `results/run_20261017_232940.txt`). Adjust `models` and `tuning.search_spaces` in `config.yaml` to change candidates. `tuning.n_trials` controls the search budget per model; `tuning.n_splits` controls the inner folds. Set `tuning.enabled: false` to reproduce the Week 4 default-model workflow. Keep the `test_set` settings fixed, and use the nested-CV scores for model choices rather than the test score.
-`results/` is created automatically the first time you run the
-pipeline, and isn't tracked in git (see `.gitignore`) since it's
-generated output, not source.
+Each model adds a row to `results/runs.csv`. The CSV contains the eight metric summaries, selection-metric scores for each fold, tuned settings, the dummy baseline, a paired comparison with the selected model, and the confusion and fairness data. The selected row also includes its optimized threshold and test metrics. This replaces new timestamped text reports; old text files remain as historical runs.
+
+Keep the `test_set` seed fixed and choose models and thresholds from development data. To change the search budget, edit `tuning.n_trials` in `config.yaml`. Set `tuning.enabled: false` to run the candidate models without hyperparameter search.
 
 You're free to improve on this structure or restructure it entirely -- what matters is that your project stays runnable end-to-end with a single command, and that each piece (data, preprocessing, model, evaluation) stays easy to find and change independently.
 
@@ -197,3 +194,23 @@ Logistic regression gained a little. The ensembles did not, and none of the diff
 ## Challenge 2: boosting logistic regression
 
 On the same three development folds, ordinary logistic regression scored 0.674 ± 0.005 and AdaBoost with logistic regression as its base learner scored 0.673 ± 0.010. Boosting did not help here. A weighted sum of linear *scores* would still be linear; AdaBoost combines the base classifiers' hard votes, so its boundary need not be one straight line. In this dataset, that extra flexibility did not improve accuracy in this small check.
+
+# Week 7 - More Models and Evaluation Metrics
+
+This week I tried three more models: gradient boosting, histogram gradient boosting and Naive Bayes. I also changed the comparison from accuracy alone to several metrics, including precision, recall and ROC-AUC. I used ROC-AUC to choose the model and balanced accuracy to choose its prediction threshold. Where a model supports class weights, I set them to `balanced`. The results for all nine models are now together in `results/runs.csv`, which makes it easier to compare the runs.
+
+I tried six hyperparameter settings per model. These were the ROC-AUC scores from nested cross-validation:
+
+| Model | Mean ROC-AUC ± fold SD |
+| --- | ---: |
+| Histogram gradient boosting | **0.727 ± 0.013** |
+| Oblique random forest | 0.727 ± 0.012 |
+| Gradient boosting | 0.726 ± 0.011 |
+| Random forest | 0.725 ± 0.012 |
+| AdaBoost | 0.725 ± 0.014 |
+| Logistic regression | 0.721 ± 0.011 |
+| Decision tree | 0.717 ± 0.011 |
+| Naive Bayes | 0.712 ± 0.011 |
+| Dummy classifier | 0.500 ± 0.000 |
+
+**Histogram gradient boosting was the best model in this run**, although the oblique random forest was almost tied with it. The threshold chosen from the training data was **0.49**. With that threshold, histogram gradient boosting reached **0.719 ROC-AUC** and **0.665 balanced accuracy** on the test set. I would not say it is clearly better than every other model yet, because the top cross-validation scores are very close. Also, this is the same test split used in earlier weeks, so a new dataset would give a stronger check.
