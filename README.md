@@ -45,6 +45,7 @@ This table is updated after each practical class, so you can always see what cha
 | 5 | Hyperparameter tuning | Search model settings with Optuna inside three-fold CV, and compare each tuning procedure with five outer folds. Refit the selected settings on all development rows. |
 | 6 | Ensembles and feature challenges | Add an oblique forest and AdaBoost, tune the ensemble candidates, then check three fixed-formula features and AdaBoost with a logistic base learner. |
 | 7 | Boosting, probability metrics and scoreboard | Add gradient boosting, histogram gradient boosting and Naive Bayes; compare models by nested ROC-AUC, choose a decision threshold on development predictions, and save candidate runs in one CSV. |
+| 8 | XGBoost and feature selection | Add XGBoost and a voting selector inside the cross-validated pipeline; tune selection with the model and compare selected versus full features on paired outer folds. |
 
 ## Environment setup
 
@@ -214,3 +215,11 @@ I tried six hyperparameter settings per model. These were the ROC-AUC scores fro
 | Dummy classifier | 0.500 ± 0.000 |
 
 **Histogram gradient boosting was the best model in this run**, although the oblique random forest was almost tied with it. The threshold chosen from the training data was **0.49**. With that threshold, histogram gradient boosting reached **0.719 ROC-AUC** and **0.665 balanced accuracy** on the test set. I would not say it is clearly better than every other model yet, because the top cross-validation scores are very close. Also, this is the same test split used in earlier weeks, so a new dataset would give a stronger check.
+
+## Week 8 - XGBoost and feature selection
+
+I added XGBoost and an optional voting selector inside the cross-validated pipeline. Selection is fitted only on each fold's training rows, and `min_votes` is tuned with the model. The default configuration applies it to XGBoost only.
+
+With five outer folds, three inner folds and three Optuna trials per condition, XGBoost scored **0.726 ± 0.011 ROC-AUC with selection** and **0.728 ± 0.013 without**. The corrected paired test found no clear gain from selection (difference −0.0018, p = 0.467). The selected model kept four of thirteen transformed features: age, prior count, priors per adult year, and the age–priors interaction.
+
+The earlier models were rerun separately on the same folds and three-trial budget. Their ranking was broadly similar to Week 7: the oblique forest scored 0.727 ± 0.012, close to selected XGBoost, while unselected XGBoost had the highest mean. I would use the full feature set for routine runs until a wider search shows a benefit from selection. Fold scores and run settings are in `results/runs.csv`.

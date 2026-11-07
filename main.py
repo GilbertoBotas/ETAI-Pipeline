@@ -5,6 +5,9 @@ Run with ``python main.py`` from the repository root.
 
 import hashlib
 import json
+import atexit
+import shutil
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,7 +23,7 @@ from src.evaluate import (
 )
 from src.model import build_pipeline
 from src.preprocessing import add_engineered_features, clean_dataset, split_dev_test, split_features_target
-from src.results import save_scores
+from src.results import save_run_report, save_scores
 from src.tuning import nested_cross_validate, tune_pipeline
 
 
@@ -42,6 +45,9 @@ def experiment_id(config):
 
 def main():
     config = load_config()
+    selection_config = config.get("feature_selection", {})
+    cache_dir = tempfile.mkdtemp(prefix="pipeline_cache_")
+    atexit.register(shutil.rmtree, cache_dir, ignore_errors=True)
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
 
@@ -84,7 +90,14 @@ def main():
     evaluated = []
     for candidate in config["models"]:
         name = candidate["type"]
-        pipeline = build_pipeline(config["preprocessing"], candidate)
+        candidate_selection = {
+            **selection_config,
+            "enabled": selection_config.get("enabled", False)
+            and name in selection_config.get("models", [name]),
+        }
+        pipeline = build_pipeline(
+            config["preprocessing"], candidate, candidate_selection, memory=cache_dir
+        )
         defaults, default_proba = cross_validate_pipeline(
             pipeline, X_dev, y_dev, outer_cv, scorers, selection_metric, cv_config["n_jobs"]
         )
@@ -96,21 +109,25 @@ def main():
 
         if tuning.get("enabled", False) and name in tuning["search_spaces"]:
             trials = tuning["n_trials"][name]
+            search_space = dict(tuning["search_spaces"][name])
+            if candidate_selection["enabled"]:
+                search_space.update(candidate_selection.get("search_space", {}))
             print(f"Tuning {name}: {trials} trials, {tuning['n_splits']} inner folds", flush=True)
             folds, oof_proba = nested_cross_validate(
                 pipeline, X_dev, y_dev, outer_cv, inner_cv, scorers, selection_metric,
-                tuning["search_spaces"][name], trials, tuning["random_state"],
+                search_space, trials, tuning["random_state"],
                 cv_config["n_jobs"],
             )
             fitted_recipe, study = tune_pipeline(
                 pipeline, X_dev, y_dev, inner_cv, scorers[selection_metric],
-                tuning["search_spaces"][name], trials, tuning["random_state"],
+                search_space, trials, tuning["random_state"],
                 cv_config["n_jobs"],
             )
             best_params, best_trial = study.best_params, study.best_value
 
         evaluated.append({
             "candidate": candidate,
+            "selection": candidate_selection,
             "folds": folds,
             "oof_proba": oof_proba,
             "recipe": fitted_recipe,
@@ -134,6 +151,13 @@ def main():
 
     # Refit only the selected model; the test rows never choose a candidate or threshold.
     final_model = winner["recipe"].fit(X_dev, y_dev)
+    kept_features = (
+        final_model.named_steps["prep"].get_feature_names_out()[
+            final_model.named_steps["select"].get_support()
+        ].tolist() if "select" in final_model.named_steps else
+        final_model.named_steps["prep"].get_feature_names_out().tolist()
+    )
+    print("Features kept: " + ", ".join(kept_features))
     test_proba = final_model.predict_proba(X_test)[:, 1]
     test_metrics = metrics_from_probabilities(y_test, test_proba, threshold)
     print("Final test metrics: " + ", ".join(
@@ -144,6 +168,7 @@ def main():
     rows = []
     for item in evaluated:
         candidate = item["candidate"]
+        item_selection = item["selection"]
         name = candidate["type"]
         folds = item["folds"]
         selected = name == winner_name
@@ -163,6 +188,12 @@ def main():
             "class_weight": candidate.get("params", {}).get("class_weight", ""),
             "encoder": config["preprocessing"]["encoder"],
             "scaler": config["preprocessing"]["scaler"],
+            "feature_selection": json.dumps({
+                "enabled": bool(item_selection["enabled"]),
+                "min_votes": item["best_params"].get(
+                    "select__min_votes", item_selection.get("min_votes")
+                ) if item_selection["enabled"] else None,
+            }, sort_keys=True),
             "base_params": json.dumps(candidate.get("params", {}), sort_keys=True),
             "tuned_params": json.dumps(item["best_params"], sort_keys=True),
             "trials": item["trials"],
@@ -194,6 +225,7 @@ def main():
             ), sort_keys=True),
         }
         if selected:
+            row["features_kept"] = json.dumps(kept_features)
             row.update({f"test_{metric}": float(value) for metric, value in test_metrics.items()})
             row.update({f"test_{key}": value for key, value in confusion_counts(
                 y_test, test_proba, threshold
@@ -224,6 +256,12 @@ def main():
                    "paired_p_value", "paired_p_holm"]].to_string(
                        index=False, float_format=lambda value: f"{value:.3f}"))
     print(f"All model results saved to {destination}")
+    save_run_report(
+        destination, run_id, winner_name,
+        next(row for row in rows if row["selected"])["feature_selection"],
+        kept_features, selection_metric, winner["folds"]["validation"].mean(),
+    )
+    shutil.rmtree(cache_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

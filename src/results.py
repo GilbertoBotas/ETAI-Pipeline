@@ -16,3 +16,14 @@ def save_scores(path, rows):
     combined.to_csv(temporary, index=False)
     temporary.replace(destination)
     return combined
+
+
+def save_run_report(scoreboard_path, run_id, model, selection, features, metric, cv_score):
+    """Save a compact human-readable summary beside the scoreboard."""
+    report = Path(scoreboard_path).with_name(f"run_{run_id}.txt")
+    report.write_text(
+        f"Run: {run_id}\nModel: {model}\nFeature selection: {selection}\n"
+        f"Features kept: {', '.join(features)}\nNested CV {metric}: {cv_score:.4f}\n",
+        encoding="utf-8",
+    )
+    return report
